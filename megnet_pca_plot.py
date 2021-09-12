@@ -621,6 +621,7 @@ for it in items:
     df = pd.read_csv(csv_name)
     data_size.append(len(df))
     r = list(range(len(df)))
+
     random.shuffle(r)
     structures = []
     targets = []
