@@ -2,40 +2,22 @@
 # -*- coding: utf-8 -*-
 
 import json
+import sys
+import random
 import pandas as pd
 import numpy as np
-import random
 import tensorflow as tf
 
-import os
-
-from megnet.data.crystal import CrystalGraph
-from megnet.data.graph import GaussianDistance
-from megnet.models import MEGNetModel
+from pymatgen.core.structure import Structure
 
 from sklearn.decomposition import PCA
 import matplotlib.pyplot as plt
+import matplotlib.gridspec as gs
+import seaborn as sns
 
-import sys
-
-tau_dict = {'pbe': 1/0.6279685889089127,
-            'hse': 1/0.7774483582697933,
-            'scan': 1/0.7430766771711287,
-            'gllb-sc': 1/1.0419268013851504} # P, H, S, G # min(MAE)
-            
-items = ['pbe', 'scan', 'hse', 'gllb-sc']
-
-tau_modify_enable = False
-
-structures = []
-targets = []
-data_size = []
-sample_weights = []
-
-from pymatgen.core.structure import Structure
 from collections import Counter
 
-from megnet.models import MEGNetModel
+# from megnet.models import MEGNetModel
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -50,7 +32,6 @@ from megnet.callbacks import ModelCheckpointMAE, ManualStop, ReduceLRUponNan
 from megnet.data.graph import GraphBatchDistanceConvert, GraphBatchGenerator, GaussianDistance
 from megnet.data.crystal import CrystalGraph
 from megnet.utils.preprocessing import DummyScaler
-import numpy as np
 import os
 from warnings import warn
 from monty.serialization import dumpfn, loadfn
@@ -597,6 +578,133 @@ def make_megnet_model(nfeat_edge=None, nfeat_global=None, nfeat_node=None, nbloc
     model = Model(inputs=[x1, x2, x3, x4, x5, x6, x7], outputs=out)
     return model
 
+def normalization(data):
+    _range = np.max(data) - np.min(data)
+    return (data - np.min(data)) / _range
+
+def df_merge(df_name, df_total):
+    for i in range(1, len(df_name)):
+        for s in df_name[i]:
+            df = df_total[s[0]]
+            for j in range(1, len(s)):
+                df = pd.merge(df, df_total[s[j]])
+            df_total[s] = df
+    return df_total
+    
+def de_duplication(df_name, df_total):
+    for i in range(1, len(df_name)):
+        for name in df_name[i]:
+            for it in df_total[name]['mp_id']:
+                for del_it in df_name[i-1]:
+                    df_total[del_it] = df_total[del_it][df_total[del_it]['mp_id'] != it]
+    
+    for key in df_total.keys():
+        df_total[key] = df_total[key].reset_index(drop=True)
+        
+    return df_total
+
+def get_predicted_features(df, dataname):
+    global model_without_last_3layers
+    if len(df) == 0:
+        return []
+    
+    r = list(range(10))
+    random.shuffle(r)
+    
+    structures = []
+    for i in r:
+        structures.append(Structure.from_str(df[dataname+'_structure'][i], fmt='cif'))
+    
+    predicted_features = [model_without_last_3layers.predict_structure(structure) for structure in structures]
+    
+    pca = PCA(copy=True, n_components=3, whiten=False)
+    np_predicted_features = np.array(predicted_features)
+    pca_predicted_features = pca.fit_transform(np_predicted_features)
+    
+    for i in range(len(pca_predicted_features[0])):
+        norm_proj = [proj[i] for proj in pca_predicted_features]
+        norm_proj = normalization(norm_proj)
+        for j in range(len(pca_predicted_features)):
+            pca_predicted_features[j][i] = norm_proj[j]
+        
+    return pca_predicted_features
+
+def megnet_pca(df_total, col_name):
+    pca_total = {}
+    for name in df_total.keys():
+        print(name, col_name[name[0]])
+        pca_total[name] = get_predicted_features(df_total[name], col_name[name[0]])
+    return pca_total
+        
+def plt_scatter(pca_data, ax2, i, x, y, label_name):
+    global colors
+    if len(pca_data) != 0:
+        ax2.scatter(pca_data[:,x], pca_data[:,y], cmap='YlGnBu', marker='.', c=colors[i], s=3, label=label_name)
+        
+def pca_plot(df_name, pca_total, x, y):
+    global colors
+    
+    fig = plt.figure()
+    outer_grid = gs.GridSpec(2, 2)
+    
+    for index, df_name_list in enumerate(df_name):
+        inner_grid = gs.GridSpecFromSubplotSpec(2, 2,
+            subplot_spec=outer_grid[index], wspace=0.0, hspace=0.0, width_ratios=[0.5, 4], height_ratios=[4, 0.5])
+        
+        ax = plt.Subplot(fig, inner_grid[3])
+        ax.set_xlim(-0.02, 1.2)
+        ax.set_xticks([0, 0.2, 0.4, 0.6, 1])
+        ax.get_yaxis().set_visible(False)
+        plt_data = []
+        for name in df_name_list:
+            if len(pca_total[name]) != 0:
+                plt_data = plt_data + [i[x] for i in pca_total[name]]
+        sns.distplot(plt_data, ax=ax, hist=False, kde_kws={"shade": True, "color": 'gray', 'facecolor': 'gray'})
+        fig.add_subplot(ax)
+        
+        ax1 = plt.Subplot(fig, inner_grid[0])
+        ax1.set_ylim(-0.02, 1.2)
+        ax.set_yticks([0, 0.2, 0.4, 0.6, 1])
+        ax1.get_xaxis().set_visible(False)
+        for name in df_name_list:
+            if len(pca_total[name]) != 0:
+                plt_data = plt_data + [i[y] for i in pca_total[name]]
+        sns.distplot(plt_data, ax=ax1, hist=False, vertical=True, kde_kws={"shade": True, "color": 'gray', 'facecolor': 'gray'})
+        fig.add_subplot(ax1)
+        
+        ax2 = plt.Subplot(fig, inner_grid[1])
+        ax2.set_xlim(-0.02, 1.2)
+        ax2.set_ylim(-0.02, 1.2)
+        ax2.get_xaxis().set_visible(False)
+        ax2.get_yaxis().set_visible(False)
+        for i, name in enumerate(df_name_list):
+            plt_scatter(pca_total[name], ax2, i, x, y, name)
+        ax2.legend()
+        fig.add_subplot(ax2)
+    
+    fig.suptitle("megnet_pca({0}, {1})".format(x, y))
+    
+df_total = {}
+'''    
+df_name = [['S', 'G'], ['SG']]
+col_name = {'S': 'scan', 'G': 'gllb-sc'}
+'''
+df_name = [['P', 'S', 'H', 'G'], ['PS', 'PH', 'PG', 'SH', 'SG', 'HG'], ['PSH', 'PSG', 'PHG', 'SHG'], ['PSHG']]
+col_name = {'P': 'pbe', 'S': 'scan', 'H': 'hse', 'G': 'gllb-sc'}
+
+for key, value in col_name.items():
+    df_total[key] = pd.read_csv('data/{0}_cif.csv'.format(value))
+
+df_total = df_merge(df_name, df_total)
+
+df_total = de_duplication(df_name, df_total)
+
+pca_total = {}
+
+for l in df_name:
+    for name in l:
+        pca_total[name] = []
+
 # for the Megnet model
 nfeat_bond = 100
 nfeat_global = 2
@@ -606,56 +714,26 @@ gaussian_width = 0.5
 distance_converter = GaussianDistance(gaussian_centers, gaussian_width)
 graph_converter = CrystalGraph(bond_converter=distance_converter, cutoff=r_cutoff)
 
-model_without_last_3layers = MEGNetModel(100, 2, nblocks=3, nvocal=95, embedding_dim=16,graph_converter=graph_converter)
+'''
+gc = CrystalGraph(bond_converter=GaussianDistance(
+    np.linspace(0, 5, 100), 0.5), cutoff=4)
+'''
 
-colors = ['green', 'black', 'red', 'blue']
-color_index = 0
+model_without_last_3layers = MEGNetModel(100, 2, nvocal=95, graph_converter=graph_converter)
+model_formation_energy = MEGNetModel.from_file('band_gap_regression.hdf5')
 
-fig_total_X = []
-fig_total_Y = []
+#replace layers
+for index, layer in enumerate(model_without_last_3layers.layers):
+    weights_trained_model = model_formation_energy.layers[index].get_weights()
+    model_without_last_3layers.layers[index].set_weights(weights_trained_model)
 
-plt.figure(figsize=(10, 15), dpi=100)
+pca_total = megnet_pca(df_total, col_name)
 
-for it in items:
-    csv_name = 'data/' + it + '_cif.csv'
-    df = pd.read_csv(csv_name)
-    data_size.append(len(df))
-    r = list(range(len(df)))
+colors = ['green', 'orange', 'red', 'blue', 'gray', 'purple']
 
-    random.shuffle(r)
-    structures = []
-    targets = []
-    sample_weights = []
-    sp_lst = []
-    for i in r:
-        structures.append(Structure.from_str(df[it+'_structure'][i], fmt='cif'))
-        sp_lst.extend(list(set(structures[-1].species)))
-        if tau_modify_enable:
-            targets.append(df[it+'_gap'][i] * tau_dict[it])
-        else:
-            targets.append(df[it+'_gap'][i])
-        sample_weights.append(1.0/len(r))
-    
-    predicted_features = [model_without_last_3layers.predict_structure(structure) for structure in structures]
-    
-    pca = PCA(copy=True, n_components=2, whiten=False)
-    np_predicted_features = np.array(predicted_features)
-    pca_predicted_features = pca.fit_transform(np_predicted_features)
-    
-    fig_X = []
-    fig_Y = []
-    
-    for it in pca_predicted_features:
-        fig_X.append(it[0])
-        fig_Y.append(it[1])
-        
-    fig_total_X.append(fig_X)
-    fig_total_Y.append(fig_Y)
-    
-    plt.scatter(fig_X, fig_Y, c=colors[color_index], s=5, label=csv_name)
-    
-    color_index += 1
+pca_plot(df_name, pca_total, 0, 1)
+pca_plot(df_name, pca_total, 0, 2)
+pca_plot(df_name, pca_total, 1, 2)
 
-plt.legend()
 plt.show()
 
