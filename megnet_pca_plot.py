@@ -608,7 +608,7 @@ def get_predicted_features(df, dataname):
     if len(df) == 0:
         return []
     
-    r = list(range(10))
+    r = list(range(len(df)))
     random.shuffle(r)
     
     structures = []
@@ -632,8 +632,8 @@ def get_predicted_features(df, dataname):
 def megnet_pca(df_total, col_name):
     pca_total = {}
     for name in df_total.keys():
-        print(name, col_name[name[0]])
         pca_total[name] = get_predicted_features(df_total[name], col_name[name[0]])
+        
     return pca_total
         
 def plt_scatter(pca_data, ax2, i, x, y, label_name):
@@ -682,7 +682,7 @@ def pca_plot(df_name, pca_total, x, y):
         ax2.legend()
         fig.add_subplot(ax2)
     
-    fig.suptitle("megnet_pca({0}, {1})".format(x, y))
+    fig.suptitle("megnet_pca({0},{1})".format(x, y))
     
 df_total = {}
 '''    
@@ -696,15 +696,15 @@ for key, value in col_name.items():
     df_total[key] = pd.read_csv('data/{0}_cif.csv'.format(value))
 
 df_total = df_merge(df_name, df_total)
-
+   
 df_total = de_duplication(df_name, df_total)
-
+   
 pca_total = {}
 
 for l in df_name:
     for name in l:
         pca_total[name] = []
-
+        
 # for the Megnet model
 nfeat_bond = 100
 nfeat_global = 2
