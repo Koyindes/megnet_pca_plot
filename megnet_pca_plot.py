@@ -653,7 +653,7 @@ def pca_plot(df_name, pca_total, x, y):
         
         ax = plt.Subplot(fig, inner_grid[3])
         ax.set_xlim(-0.02, 1.2)
-        ax.set_xticks([0, 0.2, 0.4, 0.6, 1])
+        ax.set_xticks([0, 0.2, 0.4, 0.6, 0.8, 1])
         ax.get_yaxis().set_visible(False)
         plt_data = []
         for name in df_name_list:
@@ -664,7 +664,7 @@ def pca_plot(df_name, pca_total, x, y):
         
         ax1 = plt.Subplot(fig, inner_grid[0])
         ax1.set_ylim(-0.02, 1.2)
-        ax.set_yticks([0, 0.2, 0.4, 0.6, 1])
+        ax.set_yticks([0, 0.2, 0.4, 0.6, 0.8, 1])
         ax1.get_xaxis().set_visible(False)
         for name in df_name_list:
             if len(pca_total[name]) != 0:
