@@ -13,6 +13,8 @@ from pymatgen.core.structure import Structure
 from sklearn.decomposition import PCA
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gs
+from matplotlib.patches import Ellipse
+import matplotlib.transforms as transforms
 import seaborn as sns
 
 from collections import Counter
@@ -582,6 +584,58 @@ def normalization(data):
     _range = np.max(data) - np.min(data)
     return (data - np.min(data)) / _range
 
+def confidence_ellipse(x, y, ax, n_std=3.0, facecolor='none', **kwargs):
+    """
+    Create a plot of the covariance confidence ellipse of *x* and *y*.
+
+    Parameters
+    ----------
+    x, y : array-like, shape (n, )
+        Input data.
+
+    ax : matplotlib.axes.Axes
+        The axes object to draw the ellipse into.
+
+    n_std : float
+        The number of standard deviations to determine the ellipse's radiuses.
+
+    **kwargs
+        Forwarded to `~matplotlib.patches.Ellipse`
+
+    Returns
+    -------
+    matplotlib.patches.Ellipse
+    """
+    if x.size != y.size:
+        raise ValueError("x and y must be the same size")
+
+    cov = np.cov(x, y)
+    pearson = cov[0, 1]/np.sqrt(cov[0, 0] * cov[1, 1])
+    # Using a special case to obtain the eigenvalues of this
+    # two-dimensionl dataset.
+    ell_radius_x = np.sqrt(1 + pearson)
+    ell_radius_y = np.sqrt(1 - pearson)
+    ellipse = Ellipse((0, 0), width=ell_radius_x * 2, height=ell_radius_y * 2,
+                      facecolor=facecolor, **kwargs)
+
+    # Calculating the stdandard deviation of x from
+    # the squareroot of the variance and multiplying
+    # with the given number of standard deviations.
+    scale_x = np.sqrt(cov[0, 0]) * n_std
+    mean_x = np.mean(x)
+
+    # calculating the stdandard deviation of y ...
+    scale_y = np.sqrt(cov[1, 1]) * n_std
+    mean_y = np.mean(y)
+
+    transf = transforms.Affine2D() \
+        .rotate_deg(45) \
+        .scale(scale_x, scale_y) \
+        .translate(mean_x, mean_y)
+
+    ellipse.set_transform(transf + ax.transData)
+    return ax.add_patch(ellipse)
+    
 def df_merge(df_name, df_total):
     for i in range(1, len(df_name)):
         for s in df_name[i]:
@@ -640,10 +694,82 @@ def plt_scatter(pca_data, ax2, i, x, y, label_name):
     global colors
     if len(pca_data) != 0:
         ax2.scatter(pca_data[:,x], pca_data[:,y], cmap='YlGnBu', marker='.', c=colors[i], s=3, label=label_name)
-        
-def pca_plot(df_name, pca_total, x, y):
+
+def single_set_distribution(df_name, pca_total, x, y):
     global colors
     
+    fig = plt.figure()
+    outer_grid = gs.GridSpec(2, 2)
+    
+    inner_grid = gs.GridSpecFromSubplotSpec(2, 2,
+            subplot_spec=outer_grid[0], wspace=0.0, hspace=0.0, width_ratios=[0.5, 4], height_ratios=[4, 0.5])
+            
+    ax = plt.Subplot(fig, inner_grid[3])
+    ax.set_xlim(-0.02, 1.02)
+    ax.set_xticks([0, 0.2, 0.4, 0.6, 0.8, 1])
+    ax.get_yaxis().set_visible(False)
+    plt_data_x = []
+    for name in df_name[0]:
+        if len(pca_total[name]) != 0:
+            plt_data_x = plt_data_x + [i[x] for i in pca_total[name]]
+    sns.distplot(plt_data_x, ax=ax, hist=False, kde_kws={"shade": True, "color": 'gray', 'facecolor': 'gray'})
+    fig.add_subplot(ax)
+    
+    ax1 = plt.Subplot(fig, inner_grid[0])
+    ax1.set_ylim(-0.02, 1.02)
+    ax.set_yticks([0, 0.2, 0.4, 0.6, 0.8, 1])
+    ax1.get_xaxis().set_visible(False)
+    plt_data_y = []
+    for name in df_name[0]:
+        if len(pca_total[name]) != 0:
+            plt_data_y = plt_data_y + [i[y] for i in pca_total[name]]
+    sns.distplot(plt_data_y, ax=ax1, hist=False, vertical=True, kde_kws={"shade": True, "color": 'gray', 'facecolor': 'gray'})
+    fig.add_subplot(ax1)
+        
+    ax2 = plt.Subplot(fig, inner_grid[1])
+    ax2.set_xlim(-0.02, 1.02)
+    ax2.set_ylim(-0.02, 1.02)
+    ax2.get_xaxis().set_visible(False)
+    ax2.get_yaxis().set_visible(False)
+    for i, name in enumerate(df_name[0]):
+        plt_scatter(pca_total[name], ax2, i, x, y, name)
+    ax2.legend()
+    fig.add_subplot(ax2)
+    
+    for sigma in range(1,4):
+        inner_grid = gs.GridSpecFromSubplotSpec(2, 2,
+            subplot_spec=outer_grid[sigma], wspace=0.0, hspace=0.0, width_ratios=[0.5, 4], height_ratios=[4, 0.5])
+        
+        ax = plt.Subplot(fig, inner_grid[3])
+        ax.set_xlim(-0.02, 1.02)
+        ax.set_xticks([0, 0.2, 0.4, 0.6, 0.8, 1])
+        ax.get_yaxis().set_visible(False)
+        sns.distplot(plt_data_x, ax=ax, hist=False, kde_kws={"shade": True, "color": 'gray', 'facecolor': 'gray'})
+        fig.add_subplot(ax)
+        
+        ax1 = plt.Subplot(fig, inner_grid[0])
+        ax1.set_ylim(-0.02, 1.02)
+        ax.set_yticks([0, 0.2, 0.4, 0.6, 0.8, 1])
+        ax1.get_xaxis().set_visible(False)
+        sns.distplot(plt_data_y, ax=ax1, hist=False, vertical=True, kde_kws={"shade": True, "color": 'gray', 'facecolor': 'gray'})
+        fig.add_subplot(ax1)
+        
+        ax2 = plt.Subplot(fig, inner_grid[1])
+        ax2.set_xlim(-0.02, 1.02)
+        ax2.set_ylim(-0.02, 1.02)
+        ax2.get_xaxis().set_visible(False)
+        ax2.get_yaxis().set_visible(False)
+        for i, name in enumerate(df_name[0]):
+            plt_data_x = np.array([i[x] for i in pca_total[name]])
+            plt_data_y = np.array([i[y] for i in pca_total[name]])
+            confidence_ellipse(plt_data_x, plt_data_y, ax2, n_std=sigma, 
+                alpha=0.1, label=name, facecolor=colors[i], zorder=0)
+        ax2.legend()
+        fig.add_subplot(ax2)
+    
+    fig.suptitle("confidence_ellipse_pca({0},{1})".format(x, y))
+        
+def pca_plot(df_name, pca_total, x, y):
     fig = plt.figure()
     outer_grid = gs.GridSpec(2, 2)
     
@@ -652,7 +778,7 @@ def pca_plot(df_name, pca_total, x, y):
             subplot_spec=outer_grid[index], wspace=0.0, hspace=0.0, width_ratios=[0.5, 4], height_ratios=[4, 0.5])
         
         ax = plt.Subplot(fig, inner_grid[3])
-        ax.set_xlim(-0.02, 1.2)
+        ax.set_xlim(-0.02, 1.02)
         ax.set_xticks([0, 0.2, 0.4, 0.6, 0.8, 1])
         ax.get_yaxis().set_visible(False)
         plt_data = []
@@ -663,9 +789,10 @@ def pca_plot(df_name, pca_total, x, y):
         fig.add_subplot(ax)
         
         ax1 = plt.Subplot(fig, inner_grid[0])
-        ax1.set_ylim(-0.02, 1.2)
+        ax1.set_ylim(-0.02, 1.02)
         ax.set_yticks([0, 0.2, 0.4, 0.6, 0.8, 1])
         ax1.get_xaxis().set_visible(False)
+        plt_data = []
         for name in df_name_list:
             if len(pca_total[name]) != 0:
                 plt_data = plt_data + [i[y] for i in pca_total[name]]
@@ -673,8 +800,8 @@ def pca_plot(df_name, pca_total, x, y):
         fig.add_subplot(ax1)
         
         ax2 = plt.Subplot(fig, inner_grid[1])
-        ax2.set_xlim(-0.02, 1.2)
-        ax2.set_ylim(-0.02, 1.2)
+        ax2.set_xlim(-0.02, 1.02)
+        ax2.set_ylim(-0.02, 1.02)
         ax2.get_xaxis().set_visible(False)
         ax2.get_yaxis().set_visible(False)
         for i, name in enumerate(df_name_list):
@@ -685,10 +812,10 @@ def pca_plot(df_name, pca_total, x, y):
     fig.suptitle("megnet_pca({0},{1})".format(x, y))
     
 df_total = {}
-'''    
-df_name = [['S', 'G'], ['SG']]
-col_name = {'S': 'scan', 'G': 'gllb-sc'}
-'''
+   
+# df_name = [['S', 'G'], ['SG']]
+# col_name = {'S': 'scan', 'G': 'gllb-sc'}
+
 df_name = [['P', 'S', 'H', 'G'], ['PS', 'PH', 'PG', 'SH', 'SG', 'HG'], ['PSH', 'PSG', 'PHG', 'SHG'], ['PSHG']]
 col_name = {'P': 'pbe', 'S': 'scan', 'H': 'hse', 'G': 'gllb-sc'}
 
@@ -732,8 +859,11 @@ pca_total = megnet_pca(df_total, col_name)
 colors = ['green', 'orange', 'red', 'blue', 'gray', 'purple']
 
 pca_plot(df_name, pca_total, 0, 1)
+single_set_distribution(df_name, pca_total, 0, 1)
 pca_plot(df_name, pca_total, 0, 2)
+single_set_distribution(df_name, pca_total, 0, 2)
 pca_plot(df_name, pca_total, 1, 2)
+single_set_distribution(df_name, pca_total, 1, 2)
 
 plt.show()
 
