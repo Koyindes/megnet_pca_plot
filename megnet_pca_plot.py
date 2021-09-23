@@ -7,6 +7,7 @@ import random
 import pandas as pd
 import numpy as np
 import tensorflow as tf
+import json
 
 from pymatgen.core.structure import Structure
 
@@ -698,48 +699,48 @@ def plt_scatter(pca_data, ax2, i, x, y, label_name):
 def single_set_distribution(df_name, pca_total, x, y):
     global colors
     
-    fig = plt.figure()
-    outer_grid = gs.GridSpec(2, 2)
-    
-    inner_grid = gs.GridSpecFromSubplotSpec(2, 2,
-            subplot_spec=outer_grid[0], wspace=0.0, hspace=0.0, width_ratios=[0.5, 4], height_ratios=[4, 0.5])
-            
-    ax = plt.Subplot(fig, inner_grid[3])
-    ax.set_xlim(-0.02, 1.02)
-    ax.set_xticks([0, 0.2, 0.4, 0.6, 0.8, 1])
-    ax.get_yaxis().set_visible(False)
-    plt_data_x = []
-    for name in df_name[0]:
-        if len(pca_total[name]) != 0:
-            plt_data_x = plt_data_x + [i[x] for i in pca_total[name]]
-    sns.distplot(plt_data_x, ax=ax, hist=False, kde_kws={"shade": True, "color": 'gray', 'facecolor': 'gray'})
-    fig.add_subplot(ax)
-    
-    ax1 = plt.Subplot(fig, inner_grid[0])
-    ax1.set_ylim(-0.02, 1.02)
-    ax.set_yticks([0, 0.2, 0.4, 0.6, 0.8, 1])
-    ax1.get_xaxis().set_visible(False)
-    plt_data_y = []
-    for name in df_name[0]:
-        if len(pca_total[name]) != 0:
-            plt_data_y = plt_data_y + [i[y] for i in pca_total[name]]
-    sns.distplot(plt_data_y, ax=ax1, hist=False, vertical=True, kde_kws={"shade": True, "color": 'gray', 'facecolor': 'gray'})
-    fig.add_subplot(ax1)
+    for sigma in range(1, 4):
+        fig = plt.figure(figsize=(8,3.5))
+        outer_grid = gs.GridSpec(1, 2)
         
-    ax2 = plt.Subplot(fig, inner_grid[1])
-    ax2.set_xlim(-0.02, 1.02)
-    ax2.set_ylim(-0.02, 1.02)
-    ax2.get_xaxis().set_visible(False)
-    ax2.get_yaxis().set_visible(False)
-    for i, name in enumerate(df_name[0]):
-        plt_scatter(pca_total[name], ax2, i, x, y, name)
-    ax2.legend()
-    fig.add_subplot(ax2)
-    
-    for sigma in range(1,4):
         inner_grid = gs.GridSpecFromSubplotSpec(2, 2,
-            subplot_spec=outer_grid[sigma], wspace=0.0, hspace=0.0, width_ratios=[0.5, 4], height_ratios=[4, 0.5])
+            subplot_spec=outer_grid[0], wspace=0.0, hspace=0.0, width_ratios=[0.5, 4], height_ratios=[4, 0.5])
         
+        ax = plt.Subplot(fig, inner_grid[3])
+        ax.set_xlim(-0.02, 1.02)
+        ax.set_xticks([0, 0.2, 0.4, 0.6, 0.8, 1])
+        ax.get_yaxis().set_visible(False)
+        plt_data_x = []
+        for name in df_name[0]:
+            if len(pca_total[name]) != 0:
+                plt_data_x = plt_data_x + [i[x] for i in pca_total[name]]
+        sns.distplot(plt_data_x, ax=ax, hist=False, kde_kws={"shade": True, "color": 'gray', 'facecolor': 'gray'})
+        fig.add_subplot(ax)
+        
+        ax1 = plt.Subplot(fig, inner_grid[0])
+        ax1.set_ylim(-0.02, 1.02)
+        ax.set_yticks([0, 0.2, 0.4, 0.6, 0.8, 1])
+        ax1.get_xaxis().set_visible(False)
+        plt_data_y = []
+        for name in df_name[0]:
+            if len(pca_total[name]) != 0:
+                plt_data_y = plt_data_y + [i[y] for i in pca_total[name]]
+        sns.distplot(plt_data_y, ax=ax1, hist=False, vertical=True, kde_kws={"shade": True, "color": 'gray', 'facecolor': 'gray'})
+        fig.add_subplot(ax1)
+        
+        ax2 = plt.Subplot(fig, inner_grid[1])
+        ax2.set_xlim(-0.02, 1.02)
+        ax2.set_ylim(-0.02, 1.02)
+        ax2.get_xaxis().set_visible(False)
+        ax2.get_yaxis().set_visible(False)
+        for i, name in enumerate(df_name[0]):
+            plt_scatter(pca_total[name], ax2, i, x, y, name)
+        ax2.legend()
+        fig.add_subplot(ax2)
+        
+        inner_grid = gs.GridSpecFromSubplotSpec(2, 2,
+                subplot_spec=outer_grid[1], wspace=0.0, hspace=0.0, width_ratios=[0.5, 4], height_ratios=[4, 0.5])
+            
         ax = plt.Subplot(fig, inner_grid[3])
         ax.set_xlim(-0.02, 1.02)
         ax.set_xticks([0, 0.2, 0.4, 0.6, 0.8, 1])
@@ -760,14 +761,15 @@ def single_set_distribution(df_name, pca_total, x, y):
         ax2.get_xaxis().set_visible(False)
         ax2.get_yaxis().set_visible(False)
         for i, name in enumerate(df_name[0]):
-            plt_data_x = np.array([i[x] for i in pca_total[name]])
-            plt_data_y = np.array([i[y] for i in pca_total[name]])
-            confidence_ellipse(plt_data_x, plt_data_y, ax2, n_std=sigma, 
-                alpha=0.1, label=name, facecolor=colors[i], zorder=0)
+            ellipse_x = np.array([i[x] for i in pca_total[name]])
+            ellipse_y = np.array([i[y] for i in pca_total[name]])
+            confidence_ellipse(ellipse_x, ellipse_y, ax2, n_std=sigma, 
+                    alpha=0.1, label=name, facecolor=colors[i], zorder=0)
         ax2.legend()
         fig.add_subplot(ax2)
-    
-    fig.suptitle("confidence_ellipse_pca({0},{1})".format(x, y))
+        
+        fig.subplots_adjust(top=0.925, bottom=0.065, left=0.04, right=0.99)
+        fig.suptitle("confidence_ellipse n_std={0} pca({1},{2})".format(sigma, x, y))
         
 def pca_plot(df_name, pca_total, x, y):
     fig = plt.figure()
@@ -808,7 +810,8 @@ def pca_plot(df_name, pca_total, x, y):
             plt_scatter(pca_total[name], ax2, i, x, y, name)
         ax2.legend()
         fig.add_subplot(ax2)
-    
+        
+    fig.subplots_adjust(bottom=0.045, right=0.990, left=0.050, top=0.930)
     fig.suptitle("megnet_pca({0},{1})".format(x, y))
     
 df_total = {}
@@ -855,6 +858,17 @@ for index, layer in enumerate(model_without_last_3layers.layers):
     model_without_last_3layers.layers[index].set_weights(weights_trained_model)
 
 pca_total = megnet_pca(df_total, col_name)
+
+save_pca = {}
+
+for key, value in pca_total.items():
+    if type(value) is not list:
+        save_pca[key] = value.tolist()
+
+pca_json = json.dumps(save_pca)
+f = open('pca.json', 'w')
+f.write(pca_json)
+f.close()
 
 colors = ['green', 'orange', 'red', 'blue', 'gray', 'purple']
 
