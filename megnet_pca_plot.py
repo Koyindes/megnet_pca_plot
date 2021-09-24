@@ -7,7 +7,6 @@ import random
 import pandas as pd
 import numpy as np
 import tensorflow as tf
-import json
 
 from pymatgen.core.structure import Structure
 
