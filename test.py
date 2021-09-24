@@ -22,7 +22,7 @@ def KL_divergence(p, q):
         s = 0
         for i in range(len(Q_count)):
             px = P_count[i] / sum(P_count)
-            qx = P_count[i] / sum(Q_count)
+            qx = Q_count[i] / sum(Q_count)
             if px != 0 and qx != 0:
                 print(px * log(px / qx))
                 s += px * log(px / qx)
