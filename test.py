@@ -99,7 +99,7 @@ with open('pca.json', encoding='utf-8') as f:
 
 col = ['P-SHG', 'S-PHG', 'H-PSG', 'G-PSH']
 row = [' pca_0 ', ' pca_1 ', ' pca_2 ']
-value = np.zeros((3, 4))
+value = np.zeros((5, 4))
 
 print(pca_dict.keys())
 
@@ -113,6 +113,8 @@ for i, left in enumerate(df_name[0]):
     value[0][i] = KL_3d(p, q)
     value[1][i] = KL_3d_fast(p, q, 51)
     value[2][i] = KL_3d_fast(p, q, 101)
+    value[3][i] = KL_3d_fast(p, q, 1001)
+    value[4][i] = KL_3d_fast(p, q, 10001)
 print(value)
 
 # plt.figure(figsize=(12,6))
