@@ -48,6 +48,46 @@ def KL_3d(p, q):
                     kl += px * log(px / qx)
     return kl
 
+def KL_3d_fast(p, q, arr_size):
+    kl = 0
+    p_dict = {}
+    q_dict = {}
+    arr_size -= 1
+    for p_item in p:
+        i = round(p_item[0]*arr_size)
+        j = round(p_item[1]*arr_size)
+        k = round(p_item[2]*arr_size)
+        if (i, j, k) in p_dict.keys():
+            p_dict[(i, j, k)] += 1
+        else:
+            p_dict[(i, j, k)] = 1
+    
+    for q_item in q:
+        i = round(q_item[0]*arr_size)
+        j = round(q_item[1]*arr_size)
+        k = round(q_item[2]*arr_size)
+        if (i, j, k) in q_dict.keys():
+            q_dict[(i, j, k)] += 1
+        else:
+            q_dict[(i, j, k)] = 1
+    sum_p = 0
+    sum_q = 0
+    for key in p_dict.keys():
+        sum_p += p_dict[key]
+    for key in q_dict.keys():
+        sum_q += q_dict[key]
+    
+    for key in p_dict.keys():
+        px = p_dict[key] / sum_p
+        if key in q_dict.keys():
+            qx = q_dict[key] / sum_q
+        else:
+            qx = 0
+
+        if px != 0 and qx != 0:
+            kl += px * log(px / qx)
+    return kl
+
 df_name = [['P', 'S', 'H', 'G'], ['PS', 'PH', 'PG', 'SH',	 'SG', 'HG'], ['PSH', 'PSG', 'PHG', 'SHG'], ['PSHG']]
 col_name = {'P': 'pbe', 'S': 'scan', 'H': 'hse', 'G': 'gllb-sc'}
 
@@ -71,6 +111,8 @@ for i, left in enumerate(df_name[0]):
             q.extend(pca_dict[key])
     # value[0][i], value[1][i], value[2][i] = KL_divergence(p, q)
     value[0][i] = KL_3d(p, q)
+    value[1][i] = KL_3d_fast(p, q, 51)
+    value[2][i] = KL_3d_fast(p, q, 101)
 print(value)
 
 # plt.figure(figsize=(12,6))
