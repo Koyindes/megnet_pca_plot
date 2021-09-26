@@ -99,23 +99,31 @@ with open('pca.json', encoding='utf-8') as f:
 
 col = ['P-SHG', 'S-PHG', 'H-PSG', 'G-PSH']
 row = [' pca_0 ', ' pca_1 ', ' pca_2 ']
-value = np.zeros((5, 4))
+
+max_rows = 100
+value = np.zeros((max_rows, 4))
+max_kl = np.zeros(4)
 
 print(pca_dict.keys())
 
 for i, left in enumerate(df_name[0]):
     p = pca_dict[left]
+    print(left, len(p))
     q = []
     for key in pca_dict.keys():
         if left != key:
             q.extend(pca_dict[key])
     # value[0][i], value[1][i], value[2][i] = KL_divergence(p, q)
-    value[0][i] = KL_3d(p, q)
-    value[1][i] = KL_3d_fast(p, q, 51)
-    value[2][i] = KL_3d_fast(p, q, 101)
-    value[3][i] = KL_3d_fast(p, q, 1001)
-    value[4][i] = KL_3d_fast(p, q, 10001)
+    # value[0][i] = KL_3d(p, q)
+
+    for row_idx in range(max_rows-2):
+        arr_size = row_idx + 1
+        value[row_idx][i] = KL_3d_fast(p, q, arr_size)
+        max_kl[i] = max(max_kl[i], KL_3d_fast(p, q, arr_size))
+    value[-2][i] = KL_3d_fast(p, q, 1001)
+    value[-1][i] = KL_3d_fast(p, q, 10001)
 print(value)
+print(max_kl)
 
 # plt.figure(figsize=(12,6))
 # tab = plt.table(cellText = value, 
