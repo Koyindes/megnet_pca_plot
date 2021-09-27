@@ -76,19 +76,22 @@ def KL_3d_fast(p, q, arr_size):
         sum_p += p_dict[key]
     for key in q_dict.keys():
         sum_q += q_dict[key]
-        
-    for key in q_dict.keys():
-        if key in p_dict.keys():
-            px = p_dict[key] / sum_p
+    
+    for key in p_dict.keys():
+        px = p_dict[key] / sum_p
+        if key in q_dict.keys():
             qx = q_dict[key] / sum_q
-            kl += px * log(px / qx)
-            
-    if len(q_dict.keys()) == (arr_size+1)**3 and len(p_dict.keys()) == (arr_size+1)**3:
-        return [kl, 1]
-    else:
-        return [kl, 0]
+        else:
+            qx = 0
 
-df_name = [['P', 'S', 'H', 'G'], ['PS', 'PH', 'PG', 'SH', 'SG', 'HG'], ['PSH', 'PSG', 'PHG', 'SHG'], ['PSHG']]
+        if px != 0 and qx != 0:
+            kl += px * log(px / qx)
+        else:
+            kl = -1
+            break
+    return kl
+
+df_name = [['P', 'S', 'H', 'G'], ['PS', 'PH', 'PG', 'SH',	 'SG', 'HG'], ['PSH', 'PSG', 'PHG', 'SHG'], ['PSHG']]
 col_name = {'P': 'pbe', 'S': 'scan', 'H': 'hse', 'G': 'gllb-sc'}
 
 pca_dict = {}
@@ -100,22 +103,16 @@ with open('all_pca.json', encoding='utf-8') as f:
 col = ['P-SHG', 'S-PHG', 'H-PSG', 'G-PSH']
 col_e = ['E-P', 'E-S', 'E-H', 'E-G']
 # row = [' pca_0 ', ' pca_1 ', ' pca_2 ']
-row = [' norm-1 ', ' norm-2 ']
 
-max_rows = 400
-value = np.zeros((max_rows, 4))
+max_rows = 10
 max_kl = np.zeros(4)
 max_kl_e = np.zeros(4)
 
 print(pca_dict.keys())
 
-effevtive_line = -1
+value = np.zeros((max_rows, 4))
 for i, left in enumerate(df_name[0]):
-    # p = pca_dict[left]
-    p = []
-    for key in pca_dict.keys():
-        if left in key:
-            p.extend(pca_dict[key])
+    p = pca_dict[left]
     print(left, len(p))
     q = []
     for key in pca_dict.keys():
@@ -123,20 +120,16 @@ for i, left in enumerate(df_name[0]):
             q.extend(pca_dict[key])
     # value[0][i], value[1][i], value[2][i] = KL_divergence(p, q)
     # value[0][i] = KL_3d(p, q)
-    
-    check = 1
+
     for row_idx in range(max_rows-2):
         arr_size = row_idx + 1
-        value[row_idx][i], check = KL_3d_fast(p, q, arr_size)
-        if check == 0 and effevtive_line == -1:
-            effevtive_line = row_idx
+        value[row_idx][i] = KL_3d_fast(p, q, arr_size)
         max_kl[i] = max(max_kl[i], value[row_idx][i])
-    value[-2][i], check = KL_3d_fast(p, q, 1001)
-    value[-1][i], check = KL_3d_fast(p, q, 10001)
+    value[-2][i] = KL_3d_fast(p, q, 1001)
+    value[-1][i] = KL_3d_fast(p, q, 10001)
 # print(value)
 print(max_kl)
 
-effevtive_line_e = -1
 value_e = np.zeros((max_rows, 4))
 for i, right in enumerate(df_name[0]):
     p = pca_dict['E']
@@ -148,27 +141,20 @@ for i, right in enumerate(df_name[0]):
     # value[0][i], value[1][i], value[2][i] = KL_divergence(p, q)
     # value[0][i] = KL_3d(p, q)
     
-    check = 1
     for row_idx in range(max_rows-2):
         arr_size = row_idx + 1
-        value_e[row_idx][i], check = KL_3d_fast(p, q, arr_size)
-        if check == 0 and effevtive_line_e == -1:
-            effevtive_line_e = row_idx
+        value_e[row_idx][i] = KL_3d_fast(p, q, arr_size)
         max_kl_e[i] = max(max_kl_e[i], value_e[row_idx][i])
-    value_e[-2][i], check = KL_3d_fast(p, q, 1001)
-    value_e[-1][i], check = KL_3d_fast(p, q, 10001)
+    value_e[-2][i] = KL_3d_fast(p, q, 1001)
+    value_e[-1][i] = KL_3d_fast(p, q, 10001)
 print(max_kl_e)
-    
+
 colors = ['green', 'orange', 'red', 'blue', 'gray', 'purple']
-l = np.zeros((2, 4))
 
 fig = plt.figure(figsize=(12,8))
 for i in range(len(df_name[0])):
     y = [a[i] for a in value]
-    l[0][i] = np.linalg.norm(y,ord=1)
-    l[1][i] = np.linalg.norm(y,ord=2)
     ax = plt.plot(range(1, max_rows+1), y, marker='.', c=colors[i], label=col[i])
-plt.axvline(effevtive_line)
 plt.subplots_adjust(top=0.995, bottom=0.03, left=0.02, right=0.995)
 plt.legend()
 
@@ -176,20 +162,19 @@ fig = plt.figure(figsize=(12,8))
 for i in range(len(df_name[0])):
     y = [a[i] for a in value_e]
     ax = plt.plot(range(1, max_rows+1), y, marker='.', c=colors[i], label=col_e[i])
-plt.axvline(effevtive_line_e)
-plt.subplots_adjust(top=0.995, bottom=0.03, left=0.03, right=0.995)
+plt.subplots_adjust(top=0.995,bottom=0.03,left=0.04,right=0.995)
 plt.legend()
 
-plt.figure(figsize=(12,6))
-tab = plt.table(cellText = l, 
-              colLabels = col, 
-              rowLabels = row,
-              loc = 'center', 
-              cellLoc = 'center',
-              rowLoc = 'center')
-tab.auto_set_font_size(False)
-tab.set_fontsize(10)
-# tab.scale(1,1.5) 
-plt.subplots_adjust(top=1.0, bottom=0.03, left=0.065, right=0.995,)
-plt.axis('off')
+# plt.figure(figsize=(12,6))
+# tab = plt.table(cellText = value, 
+#               colLabels = col, 
+#               rowLabels = row,
+#               loc = 'center', 
+#               cellLoc = 'center',
+#               rowLoc = 'center')
+# tab.auto_set_font_size(False)
+# tab.set_fontsize(10)
+# # tab.scale(1,1.5) 
+# plt.subplots_adjust(bottom=0.040, right=0.995, left=0.055, top=1.000)
+# plt.axis('off')
 plt.show()
