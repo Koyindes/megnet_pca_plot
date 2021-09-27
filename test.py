@@ -86,6 +86,9 @@ def KL_3d_fast(p, q, arr_size):
 
         if px != 0 and qx != 0:
             kl += px * log(px / qx)
+        else:
+            kl = -1
+            break
     return kl
 
 df_name = [['P', 'S', 'H', 'G'], ['PS', 'PH', 'PG', 'SH',	 'SG', 'HG'], ['PSH', 'PSG', 'PHG', 'SHG'], ['PSHG']]
